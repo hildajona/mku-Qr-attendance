@@ -1,0 +1,33 @@
+{
+  "name": "mku-attendance",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "axios": "^1.16.1",
+    "chart.js": "^4.5.1",
+    "jspdf": "^4.2.1",
+    "jsqr": "^1.4.0",
+    "lucide-react": "^1.14.0",
+    "papaparse": "^5.5.3",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.6",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "^19.2.6",
+    "react-hot-toast": "^2.6.0",
+    "react-router-dom": "^7.15.0",
+    "tailwindcss": "^4.3.0",
+    "uuid": "^14.0.0"
+  }
+}
