@@ -15,6 +15,7 @@ const navConfig = {
     { to: '/admin/lecturers',    label: 'Lecturers',    icon: GraduationCap },
     { to: '/admin/units',        label: 'Units',        icon: Layers },
     { to: '/admin/students',     label: 'Students',     icon: Users },
+    { to: '/admin/registrations', label: 'Registrations', icon: UserPlus },
     { to: '/admin/sessions',     label: 'Sessions',     icon: CalendarCheck },
     { to: '/admin/reports',      label: 'Reports',      icon: BarChart3 },
     { to: '/admin/analytics',    label: 'Analytics',    icon: TrendingUp },
@@ -50,7 +51,7 @@ const adminSections = [
   },
   {
     label: 'Management',
-    items: ['Departments', 'Lecturers', 'Units', 'Students', 'Sessions'],
+    items: ['Departments', 'Lecturers', 'Units', 'Students', 'Registrations', 'Sessions'],
   },
   {
     label: 'Insights',
