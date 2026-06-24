@@ -32,8 +32,8 @@ export default function Register() {
   const [touched, setTouched] = useState({})
 
   useEffect(() => {
-    api.get('/courses')
-      .then(({ data }) => setCourses(data.courses || []))
+    api.get('/auth/registration-metadata')
+      .then(({ data }) => setCourses(data.programmes || []))
       .catch(() => setCourses([
         { id: 1, name: 'Bachelor of Science in Computer Science',        code: 'BSC-CS'   },
         { id: 2, name: 'Bachelor of Science in Information Technology',  code: 'BSC-IT'   },
