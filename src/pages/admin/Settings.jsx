@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 
 export default function Settings() {
   const [settings, setSettings] = useState({
-    university_name: 'Mount Kenya University',
+    university_name: 'CAMS – Campus Attendance Management System',
     qr_expiry_seconds: 300,
     email_notifications: true,
     low_attendance_threshold: 75,
@@ -38,8 +38,9 @@ export default function Settings() {
   const Section = ({ icon: Icon, title, children }) => (
     <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
       <div className="flex items-center gap-2 mb-5">
-        <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
-          <Icon size={16} className="text-green-600" />
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+          style={{ background: '#E8F1FB' }}>
+          <Icon size={16} style={{ color: '#0057A8' }} />
         </div>
         <h2 className="font-semibold text-slate-800">{title}</h2>
       </div>
@@ -55,7 +56,8 @@ export default function Settings() {
       </div>
       <button
         onClick={() => onChange(!value)}
-        className={`relative w-11 h-6 rounded-full transition-colors ${value ? 'bg-green-500' : 'bg-slate-200'}`}
+        className={`relative w-11 h-6 rounded-full transition-colors`}
+        style={{ background: value ? '#0057A8' : '#E2E8F0' }}
       >
         <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${value ? 'translate-x-5' : ''}`} />
       </button>
@@ -96,7 +98,7 @@ export default function Settings() {
                 step={30}
                 value={settings.qr_expiry_seconds}
                 onChange={e => setSettings(s => ({ ...s, qr_expiry_seconds: Number(e.target.value) }))}
-                className="flex-1 accent-green-600"
+                className="flex-1 accent-blue-600"
               />
               <span className="text-sm font-semibold text-slate-700 w-20 text-right">
                 {Math.floor(settings.qr_expiry_seconds / 60)}m {settings.qr_expiry_seconds % 60}s

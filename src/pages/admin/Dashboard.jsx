@@ -1,174 +1,278 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import PageWrapper from '../../components/layout/PageWrapper'
-import MetricCard from '../../components/ui/MetricCard'
-import StatusBadge from '../../components/ui/StatusBadge'
-import AttendanceChart from '../../components/charts/AttendanceChart'
-import { Users, GraduationCap, CalendarCheck, TrendingUp, AlertTriangle, Clock } from 'lucide-react'
+import {
+  Users, GraduationCap, CalendarCheck, TrendingUp, Building2,
+  BookOpen, Activity, UserPlus, QrCode, ArrowRight, AlertTriangle, Database
+} from 'lucide-react'
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement,
+  PointElement, LineElement, Title, Tooltip, Legend, Filler
+} from 'chart.js'
+import { Bar, Line } from 'react-chartjs-2'
 import api from '../../services/api'
 
+ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend, Filler)
+
+const BAR_DATA = {
+  labels: ['SCIT', 'SBUS', 'SENG', 'SHS', 'SEDU', 'SLAW'],
+  datasets: [{
+    label: 'Attendance Rate %',
+    data: [84, 76, 71, 89, 65, 78],
+    backgroundColor: 'rgba(0, 87, 168, 0.85)',
+    borderRadius: 6,
+    borderSkipped: false,
+  }],
+}
+
+const BAR_OPTS = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: { backgroundColor: '#0F172A', cornerRadius: 8, padding: 10,
+      callbacks: { label: ctx => ` ${ctx.raw}%` } },
+  },
+  scales: {
+    x: { grid: { display: false }, ticks: { color: '#64748B', font: { size: 11 } } },
+    y: { beginAtZero: true, max: 100, grid: { color: '#F1F5F9' },
+      ticks: { color: '#64748B', font: { size: 11 }, callback: v => `${v}%` } },
+  },
+}
+
+const LINE_DATA = {
+  labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+  datasets: [
+    { label: 'Present', data: [820, 740, 910, 680, 950, 200, 0],
+      borderColor: '#0057A8', backgroundColor: 'rgba(0,87,168,0.08)',
+      borderWidth: 2.5, pointRadius: 4, pointBackgroundColor: '#0057A8', fill: true, tension: 0.3 },
+    { label: 'Absent', data: [180, 260, 90, 320, 50, 10, 0],
+      borderColor: '#DC2626', backgroundColor: 'transparent',
+      borderWidth: 2, borderDash: [5, 3], pointRadius: 3, fill: false, tension: 0.3 },
+  ],
+}
+
+const LINE_OPTS = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: {
+    legend: { position: 'top', labels: { usePointStyle: true, font: { size: 12 } } },
+    tooltip: { backgroundColor: '#0F172A', cornerRadius: 8, padding: 10 },
+  },
+  scales: {
+    x: { grid: { display: false }, ticks: { color: '#64748B', font: { size: 11 } } },
+    y: { beginAtZero: true, grid: { color: '#F1F5F9' }, ticks: { color: '#64748B', font: { size: 11 } } },
+  },
+}
+
+const FEED = [
+  { id: 1, msg: 'Alice Wanjiku checked in to Data Structures',      time: '2 min ago',  Icon: CalendarCheck, clr: '#059669', bg: '#D1FAE5' },
+  { id: 2, msg: 'Dr. Mwangi started a session for SCT211',          time: '8 min ago',  Icon: QrCode,        clr: '#0057A8', bg: '#E8F1FB' },
+  { id: 3, msg: '47 students checked in to Database Systems',       time: '15 min ago', Icon: Users,         clr: '#7C3AED', bg: '#EDE9FE' },
+  { id: 4, msg: 'Prof. Kamau started a session for SCT222',         time: '22 min ago', Icon: QrCode,        clr: '#0057A8', bg: '#E8F1FB' },
+  { id: 5, msg: 'New lecturer Dr. Odhiambo added to SBUS',          time: '1 hr ago',   Icon: UserPlus,      clr: '#D97706', bg: '#FEF3C7' },
+  { id: 6, msg: 'Low attendance alert: OS Fundamentals — 42%',      time: '2 hrs ago',  Icon: AlertTriangle, clr: '#DC2626', bg: '#FEE2E2' },
+  { id: 7, msg: 'Session closed — Engineering Drawing (78 scanned)',time: '3 hrs ago',  Icon: CalendarCheck, clr: '#475569', bg: '#F1F5F9' },
+]
+
+function StatCard({ label, value, sub, Icon, iconColor, iconBg, trend, loading }) {
+  return (
+    <div className="mku-card flex items-start gap-4 fade-in">
+      <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: iconBg }}>
+        <Icon size={22} style={{ color: iconColor }} />
+      </div>
+      <div className="flex-1 min-w-0">
+        {loading ? (
+          <><div className="skeleton h-7 w-20 rounded mb-1" /><div className="skeleton h-3.5 w-28 rounded" /></>
+        ) : (
+          <>
+            <p className="text-2xl font-bold leading-none" style={{ color: 'var(--text-primary)' }}>{value}</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{label}</p>
+            {sub && (
+              <p className={`text-xs mt-0.5 font-semibold ${trend > 0 ? 'text-green-600' : trend < 0 ? 'text-red-500' : ''}`}>
+                {trend > 0 ? '↑' : trend < 0 ? '↓' : ''} {sub}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminDashboard() {
-  const [stats, setStats]     = useState(null)
-  const [sessions, setSessions] = useState([])
-  const [alerts, setAlerts]   = useState([])
-  const [chartData, setChartData] = useState([])
+  const navigate = useNavigate()
+  const [stats, setStats] = useState(null)
+  const [health, setHealth] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const [statsRes, sessionsRes] = await Promise.all([
-          api.get('/admin/stats'),
-          api.get('/admin/recent-sessions'),
-        ])
-        setStats(statsRes.data)
-        setSessions(sessionsRes.data.sessions || [])
-        setAlerts(sessionsRes.data.alerts || [])
-        setChartData(sessionsRes.data.chart || [])
-      } catch {
-        // Use mock data if backend not connected
-        setStats({ students: 1240, lecturers: 48, sessions_today: 12, avg_attendance: 78 })
-        setSessions([
-          { id: 1, unit_name: 'Data Structures', course_name: 'BSc CS', room: 'LH-3', started_at: new Date().toISOString(), is_active: true, attendance_count: 34 },
-          { id: 2, unit_name: 'Calculus II', course_name: 'BSc Math', room: 'LH-1', started_at: new Date(Date.now() - 3600000).toISOString(), is_active: false, attendance_count: 28 },
-          { id: 3, unit_name: 'Database Systems', course_name: 'BSc IT', room: 'Lab-2', started_at: new Date(Date.now() - 7200000).toISOString(), is_active: false, attendance_count: 41 },
-        ])
-        setAlerts([
-          { unit: 'Operating Systems', avg: 42, course: 'BSc CS' },
-          { unit: 'Linear Algebra', avg: 38, course: 'BSc Math' },
-        ])
-        setChartData([
-          { unit_name: 'Data Structures', present: 34, absent: 6 },
-          { unit_name: 'Calculus II', present: 28, absent: 12 },
-          { unit_name: 'Database Systems', present: 41, absent: 4 },
-          { unit_name: 'Networks', present: 22, absent: 18 },
-          { unit_name: 'OS', present: 19, absent: 21 },
-        ])
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
+    Promise.all([
+      api.get('/admin/stats').catch(() => null),
+      api.get('/health').catch(() => null),
+    ]).then(([sRes, hRes]) => {
+      setStats(sRes?.data || { departments: 6, lecturers: 101, students: 10248, sessions_today: 14, avg_attendance: 79, active_sessions: 2 })
+      setHealth(hRes?.data)
+    }).finally(() => setLoading(false))
   }, [])
 
   return (
-    <PageWrapper title="Admin Dashboard">
+    <PageWrapper title="Dashboard">
       <div className="space-y-6">
-        {/* Metrics */}
+
+        {/* System health bar */}
+        {health && (
+          <div className="rounded-2xl px-5 py-3 flex items-center gap-4 flex-wrap text-xs" style={{ background: 'var(--bg-sidebar)' }}>
+            <div className="flex items-center gap-2 text-green-400 font-semibold">
+              <Activity size={14} /> CAMS v{health.version || '2.0.0'}
+            </div>
+            <div className="flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+              <Database size={12} /> {health.database}
+            </div>
+            <div className="ml-auto" style={{ color: 'var(--text-secondary)' }}>
+              {new Date().toLocaleDateString('en-KE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </div>
+          </div>
+        )}
+
+        {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard
-            label="Total Students"
-            value={loading ? '...' : stats?.students?.toLocaleString()}
-            icon={Users}
-            iconColor="text-blue-600"
-            iconBg="bg-blue-50"
-            trend={3}
-            trendLabel="+3% this month"
-          />
-          <MetricCard
-            label="Lecturers"
-            value={loading ? '...' : stats?.lecturers}
-            icon={GraduationCap}
-            iconColor="text-purple-600"
-            iconBg="bg-purple-50"
-          />
-          <MetricCard
-            label="Sessions Today"
-            value={loading ? '...' : stats?.sessions_today}
-            icon={CalendarCheck}
-            iconColor="text-green-600"
-            iconBg="bg-green-50"
-            trend={2}
-            trendLabel="+2 vs yesterday"
-          />
-          <MetricCard
-            label="Avg Attendance"
-            value={loading ? '...' : `${stats?.avg_attendance}%`}
-            icon={TrendingUp}
-            iconColor="text-amber-600"
-            iconBg="bg-amber-50"
-            trend={-1}
-            trendLabel="-1% this week"
-          />
+          <StatCard label="Total Departments" value={loading ? '…' : stats?.departments}
+            Icon={Building2} iconColor="#0057A8" iconBg="#E8F1FB" loading={loading} />
+          <StatCard label="Total Lecturers" value={loading ? '…' : stats?.lecturers?.toLocaleString()}
+            sub="+3 this month" trend={1} Icon={GraduationCap} iconColor="#7C3AED" iconBg="#EDE9FE" loading={loading} />
+          <StatCard label="Total Students" value={loading ? '…' : stats?.students?.toLocaleString()}
+            sub="+128 this month" trend={1} Icon={Users} iconColor="#059669" iconBg="#D1FAE5" loading={loading} />
+          <StatCard label="Today's Sessions" value={loading ? '…' : stats?.sessions_today}
+            sub={`${stats?.active_sessions || 0} active now`} trend={stats?.active_sessions > 0 ? 1 : 0}
+            Icon={CalendarCheck} iconColor="#D97706" iconBg="#FEF3C7" loading={loading} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Chart */}
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
-            <h2 className="font-semibold text-slate-800 mb-4">Attendance by Unit (Today)</h2>
-            <AttendanceChart data={chartData} title="" />
-          </div>
-
-          {/* Low attendance alerts */}
-          <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle size={16} className="text-amber-500" />
-              <h2 className="font-semibold text-slate-800">Low Attendance Alerts</h2>
+        {/* Charts row */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Bar chart — dept attendance */}
+          <div className="lg:col-span-3 mku-card">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>Attendance Rate by Department</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>This week · all units</p>
+              </div>
+              <button onClick={() => navigate('/admin/reports')}
+                className="text-xs font-semibold flex items-center gap-1" style={{ color: 'var(--mku-blue-accent)' }}>
+                Full report <ArrowRight size={12} />
+              </button>
             </div>
-            {alerts.length === 0 ? (
-              <p className="text-sm text-slate-400">No alerts — all units above threshold.</p>
-            ) : (
-              <div className="space-y-3">
-                {alerts.map((a, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 bg-amber-50 rounded-xl">
-                    <div>
-                      <p className="text-sm font-medium text-slate-700">{a.unit}</p>
-                      <p className="text-xs text-slate-400">{a.course}</p>
-                    </div>
-                    <span className="text-sm font-bold text-amber-600">{a.avg}%</span>
-                  </div>
-                ))}
+            {loading ? <div className="skeleton h-52 rounded-xl" /> : (
+              <div style={{ height: 210 }}>
+                <Bar data={BAR_DATA} options={BAR_OPTS} />
               </div>
             )}
           </div>
+
+          {/* Side stats */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Avg attendance ring */}
+            <div className="mku-card text-center">
+              <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--text-secondary)' }}>
+                Weekly Avg Attendance
+              </p>
+              <div className="relative w-28 h-28 mx-auto">
+                <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+                  <circle cx="50" cy="50" r="40" fill="none" stroke="var(--border-color)" strokeWidth="10" />
+                  <circle cx="50" cy="50" r="40" fill="none" stroke="#0057A8" strokeWidth="10"
+                    strokeDasharray={`${2 * Math.PI * 40 * (loading ? 0 : (stats?.avg_attendance || 79)) / 100} ${2 * Math.PI * 40}`}
+                    strokeLinecap="round" style={{ transition: 'stroke-dasharray 1s ease' }} />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>
+                    {loading ? '…' : `${stats?.avg_attendance || 79}%`}
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs mt-2 text-green-600 font-semibold">↑ +2% vs last week</p>
+            </div>
+
+            {/* Low attendance alerts */}
+            <div className="mku-card">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle size={15} className="text-amber-500" />
+                <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Low Attendance Alerts</h3>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { unit: 'OS Fundamentals', dept: 'SCIT', rate: 42 },
+                  { unit: 'Linear Algebra', dept: 'SENG', rate: 38 },
+                  { unit: 'Business Stats', dept: 'SBUS', rate: 51 },
+                ].map(a => (
+                  <div key={a.unit} className="flex items-center justify-between p-2.5 rounded-xl" style={{ background: '#FEF3C7' }}>
+                    <div>
+                      <p className="text-xs font-semibold" style={{ color: '#92400E' }}>{a.unit}</p>
+                      <p className="text-xs" style={{ color: '#B45309' }}>{a.dept}</p>
+                    </div>
+                    <span className="text-base font-bold" style={{ color: '#D97706' }}>{a.rate}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Recent sessions */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <h2 className="font-semibold text-slate-800">Recent Sessions</h2>
+        {/* Weekly trend line chart */}
+        <div className="mku-card">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>Weekly Attendance Trend</h2>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>Students present vs absent across all departments</p>
+            </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-100">
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Unit</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Course</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Room</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Time</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Scanned</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  Array.from({ length: 3 }).map((_, i) => (
-                    <tr key={i} className="border-b border-slate-50">
-                      {Array.from({ length: 6 }).map((_, j) => (
-                        <td key={j} className="px-5 py-3">
-                          <div className="h-4 bg-slate-100 rounded animate-pulse w-24" />
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                ) : sessions.map(s => (
-                  <tr key={s.id} className="border-b border-slate-50 table-row-hover">
-                    <td className="px-5 py-3 font-medium text-slate-700">{s.unit_name}</td>
-                    <td className="px-5 py-3 text-slate-500">{s.course_name}</td>
-                    <td className="px-5 py-3 text-slate-500">{s.room || '—'}</td>
-                    <td className="px-5 py-3 text-slate-500">
-                      <div className="flex items-center gap-1">
-                        <Clock size={13} className="text-slate-400" />
-                        {new Date(s.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </div>
-                    </td>
-                    <td className="px-5 py-3 text-slate-700 font-medium">{s.attendance_count}</td>
-                    <td className="px-5 py-3">
-                      <StatusBadge status={s.is_active ? 'active' : 'expired'} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {loading ? <div className="skeleton h-44 rounded-xl" /> : (
+            <div style={{ height: 175 }}>
+              <Line data={LINE_DATA} options={LINE_OPTS} />
+            </div>
+          )}
+        </div>
+
+        {/* Bottom row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Activity feed */}
+          <div className="mku-card">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>Recent Activity</h2>
+              <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: 'var(--mku-blue-light)', color: 'var(--mku-blue)' }}>Live</span>
+            </div>
+            <div className="space-y-1">
+              {FEED.map(({ id, msg, time, Icon, clr, bg }) => (
+                <div key={id} className="flex items-start gap-3 px-2 py-2.5 rounded-xl table-row-hover">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: bg }}>
+                    <Icon size={14} style={{ color: clr }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm" style={{ color: 'var(--text-primary)' }}>{msg}</p>
+                  </div>
+                  <span className="text-xs flex-shrink-0 mt-0.5" style={{ color: 'var(--text-secondary)' }}>{time}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Quick actions */}
+          <div className="mku-card">
+            <h2 className="font-bold text-base mb-4" style={{ color: 'var(--text-primary)' }}>Quick Actions</h2>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'Add Department', Icon: Building2, path: '/admin/departments', clr: '#0057A8', bg: '#E8F1FB' },
+                { label: 'Add Lecturer',   Icon: GraduationCap, path: '/admin/lecturers', clr: '#7C3AED', bg: '#EDE9FE' },
+                { label: 'Add Unit',       Icon: BookOpen, path: '/admin/units', clr: '#059669', bg: '#D1FAE5' },
+                { label: 'Add Student',    Icon: UserPlus, path: '/admin/students', clr: '#D97706', bg: '#FEF3C7' },
+                { label: 'View Sessions',  Icon: CalendarCheck, path: '/admin/sessions', clr: '#DC2626', bg: '#FEE2E2' },
+                { label: 'Reports',        Icon: TrendingUp, path: '/admin/reports', clr: '#0891B2', bg: '#E0F7FA' },
+              ].map(({ label, Icon, path, clr, bg }) => (
+                <button key={label} onClick={() => navigate(path)}
+                  className="flex items-center gap-3 p-3 rounded-xl transition-all hover:shadow-md"
+                  style={{ background: bg, border: `1px solid ${clr}22` }}>
+                  <Icon size={18} style={{ color: clr }} />
+                  <span className="text-sm font-semibold" style={{ color: clr }}>{label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

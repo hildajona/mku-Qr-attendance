@@ -23,6 +23,7 @@ export default function AuthGuard({ children, allowedRoles = [] }) {
     const roleRoutes = {
       admin:    '/admin',
       lecturer: '/lecturer',
+      hod:      '/hod',
       student:  '/student',
     }
     return <Navigate to={roleRoutes[user.role] || '/login'} replace />

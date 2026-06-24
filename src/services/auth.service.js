@@ -12,4 +12,10 @@ export const authService = {
 
   changePassword: (currentPassword, newPassword) =>
     api.put('/auth/change-password', { currentPassword, newPassword }),
+
+  registerStudent: (data) =>
+    api.post('/auth/register/student', data),
+
+  getRegistrationMetadata: () =>
+    api.get('/auth/registration-metadata'),
 }

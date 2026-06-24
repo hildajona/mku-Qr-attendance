@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api from '../../services/api'
+import { io } from 'socket.io-client'
 
 export default function Session() {
   const navigate = useNavigate()
@@ -25,7 +26,9 @@ export default function Session() {
   } = useSession()
 
   const [units, setUnits]           = useState([])
-  const [form, setForm]             = useState({ unit_id: '', room: '', classroom_name: '', latitude: '', longitude: '', radius_meters: 100, duration_minutes: 60, qr_expiry_seconds: 300 })
+  const [venues, setVenues]         = useState([])
+  const [form, setForm]             = useState({ unit_id: '', venue_id: '', duration_minutes: 60, qr_expiry_seconds: 300 })
+  const [gpsConfig, setGpsConfig]   = useState(null)
   const [creating, setCreating]     = useState(false)
   const [regenerating, setRegenerating] = useState(false)
   const [locStatus, setLocStatus]   = useState('')
@@ -48,19 +51,84 @@ export default function Session() {
           { id: 3, name: 'Cybersecurity Fundamentals', code: 'SIT 203', course_name: 'BSc IT' },
         ])
       })
+
+
+    // Load venues
+    api.get('/venues')
+      .then(({ data }) => setVenues(data))
+      .catch(() => {})
   }, [])
 
-  // Poll attendance every 5 s while session is active
+  const groupedVenues = venues.reduce((acc, v) => {
+    if (!acc[v.building]) acc[v.building] = []
+    acc[v.building].push(v)
+    return acc
+  }, {})
+
+  const handleVenueSelect = (venueId) => {
+    setForm(f => ({ ...f, venue_id: venueId }))
+    const venue = venues.find(v => String(v.id) === String(venueId))
+    if (venue) {
+      setGpsConfig({
+        latitude:     venue.latitude,
+        longitude:    venue.longitude,
+        radiusMeters: venue.radius_meters,
+        venueName:    venue.name,
+        building:     venue.building,
+        venueType:    venue.venue_type,
+        wifiBssid:    venue.wifi_bssid
+      })
+    } else {
+      setGpsConfig(null)
+    }
+  }
+
+  // WebSocket connection & Poll fallback
   useEffect(() => {
-    if (!activeSession) { clearInterval(pollRef.current); return }
-    const fetch = () => {
+    if (!activeSession) {
+      clearInterval(pollRef.current)
+      return
+    }
+
+    // Connect to websocket
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000'
+    const socket = io(socketUrl, {
+      withCredentials: true,
+      transports: ['websocket', 'polling']
+    })
+
+    socket.emit('join_session', activeSession.id)
+
+    socket.on('attendance_update', (data) => {
+      toast.success(`${data.student_name} scanned successfully!`)
+      setAllAttendees(prev => {
+        if (prev.some(a => a.student_id === data.student_id || a.id === data.student_id)) return prev
+        const newRecord = {
+          id: data.student_id,
+          student_id: data.student_id,
+          student_name: data.student_name,
+          reg_number: data.reg_number,
+          status: data.status,
+          scanned_at: data.scanned_at
+        }
+        return [newRecord, ...prev]
+      })
+    })
+
+    // Fallback Polling every 5 s (to handle disconnects or off-network cases)
+    const fetchAttendance = () => {
       attendanceService.getSessionAttendance(activeSession.id)
         .then(({ data }) => setAllAttendees(data.records || []))
         .catch(() => {})
     }
-    fetch()
-    pollRef.current = setInterval(fetch, 5000)
-    return () => clearInterval(pollRef.current)
+    fetchAttendance()
+    pollRef.current = setInterval(fetchAttendance, 5000)
+
+    return () => {
+      socket.emit('leave_session', activeSession.id)
+      socket.disconnect()
+      clearInterval(pollRef.current)
+    }
   }, [activeSession, setAllAttendees])
 
   // Build the QR payload object that gets encoded into the QR image
@@ -77,15 +145,14 @@ export default function Session() {
 
   const handleCreate = async () => {
     if (!form.unit_id) { toast.error('Please select a unit'); return }
-    if (!form.classroom_name.trim()) { toast.error('Please enter a classroom name'); return }
-    if (!form.latitude || !form.longitude) { toast.error('Please capture classroom coordinates'); return }
+    if (!form.venue_id) { toast.error('Please select a venue'); return }
     setCreating(true)
     try {
       const payload = {
-        ...form,
-        latitude: parseFloat(form.latitude),
-        longitude: parseFloat(form.longitude),
-        radius_meters: Number(form.radius_meters),
+        unit_id: form.unit_id,
+        venue_id: form.venue_id,
+        duration_minutes: form.duration_minutes,
+        qr_expiry_seconds: form.qr_expiry_seconds
       }
       const { data } = await sessionService.createSession(payload)
       const session = data.session || data
@@ -99,31 +166,7 @@ export default function Session() {
   }
 
   const detectLocation = useCallback(() => {
-    if (!navigator.geolocation) {
-      setLocStatus('Geolocation is not supported by your browser.')
-      return
-    }
-    setLocStatus('Requesting classroom location...')
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setForm(f => ({
-          ...f,
-          latitude: position.coords.latitude.toFixed(6),
-          longitude: position.coords.longitude.toFixed(6),
-          radius_meters: 100,
-        }))
-        setLocStatus(`Captured location: ${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`)
-      },
-      (error) => {
-        const messages = {
-          1: 'Location permission denied. Please allow location and try again.',
-          2: 'Location unavailable. Try again outside or allow GPS access.',
-          3: 'Location request timed out. Try again.',
-        }
-        setLocStatus(messages[error.code] || 'Unable to get location. Please try again.')
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    )
+    // Deprecated with auto geofence, kept if needed later for manual overrides
   }, [])
 
   const handleRegenerate = useCallback(async () => {
@@ -159,7 +202,7 @@ export default function Session() {
         {/* Header */}
         <div className="text-center mb-6">
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-1">
-            Mount Kenya University
+            CAMS — Campus Attendance Management System
           </p>
           <h1 className="text-4xl font-bold text-slate-800">{activeSession.unit_name}</h1>
           {activeSession.room && (
@@ -204,6 +247,16 @@ export default function Session() {
             ))}
           </div>
         )}
+
+        {/* Rotating Code & USSD/SMS fallback */}
+        <div className="w-full max-w-md bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6 text-center shadow-sm">
+          <p className="text-xs font-semibold text-blue-800 tracking-wide uppercase mb-1">USSD / SMS Fallback (No Smartphone)</p>
+          <p className="text-xs text-slate-500 mb-2">Dial <span className="font-mono font-bold text-slate-700">*384*5000#</span> or SMS <span className="font-mono font-bold text-slate-700">ATTEND {activeSession.rotating_code || '123456'}</span> to 22384</p>
+          <div className="inline-flex items-center gap-2 bg-white px-4 py-1.5 rounded-xl border border-blue-100">
+            <span className="text-xs font-semibold text-slate-400">CLASS CODE:</span>
+            <span className="text-2xl font-mono font-bold text-blue-700">{activeSession.rotating_code || '123456'}</span>
+          </div>
+        </div>
 
         <button
           onClick={() => setIsFullscreen(false)}
@@ -254,52 +307,42 @@ export default function Session() {
                 </select>
               </div>
 
-              <Input
-                label="Room / Venue"
-                placeholder="e.g. LH-3, Lab-2, Online"
-                value={form.room}
-                onChange={e => setForm(f => ({ ...f, room: e.target.value }))}
-              />
-
-              <Input
-                label="Classroom Name"
-                placeholder="e.g. Lecture Hall 3"
-                value={form.classroom_name}
-                onChange={e => setForm(f => ({ ...f, classroom_name: e.target.value }))}
-              />
-
-              <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Input
-                  label="Latitude"
-                  placeholder="-0.416667"
-                  value={form.latitude}
-                  onChange={e => setForm(f => ({ ...f, latitude: e.target.value }))}
-                />
-                <Input
-                  label="Longitude"
-                  placeholder="36.950000"
-                  value={form.longitude}
-                  onChange={e => setForm(f => ({ ...f, longitude: e.target.value }))}
-                />
-                <Input
-                  label="Radius (m)"
-                  type="number"
-                  min={25}
-                  max={500}
-                  value={form.radius_meters}
-                  onChange={e => setForm(f => ({ ...f, radius_meters: Number(e.target.value) }))}
-                />
-              </div>
+              {/* Venue selector */}
               <div className="sm:col-span-2">
-                <button
-                  type="button"
-                  onClick={detectLocation}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                <label className="text-sm font-medium text-slate-700 block mb-1">
+                  Venue <span className="text-red-500">*</span>
+                </label>
+                <select
+                  className="input-base"
+                  value={form.venue_id}
+                  onChange={e => handleVenueSelect(e.target.value)}
                 >
-                  Auto-detect Classroom Location
-                </button>
-                {locStatus && <p className="mt-2 text-xs text-slate-500">{locStatus}</p>}
+                  <option value="">— Select a venue —</option>
+                  {Object.entries(groupedVenues).map(([building, rooms]) => (
+                    <optgroup label={building} key={building}>
+                      {rooms.map(r => (
+                        <option value={r.id} key={r.id}>
+                          {r.name} (cap: {r.capacity || 'N/A'})
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
               </div>
+
+              {gpsConfig && (
+                <div className="sm:col-span-2 bg-slate-50 rounded-xl p-4 border border-slate-200 mt-2">
+                  <p className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                    <MapPin size={16} className="text-green-600" /> GPS Auto-Set
+                  </p>
+                  <div className="grid grid-cols-2 gap-y-2 text-sm">
+                    <div><span className="text-slate-500">Venue:</span> <span className="font-medium text-slate-700">{gpsConfig.venueName}, {gpsConfig.building}</span></div>
+                    <div><span className="text-slate-500">Radius:</span> <span className="font-medium text-slate-700">{gpsConfig.radiusMeters}m ({gpsConfig.venueType.replace('_', ' ')})</span></div>
+                    <div><span className="text-slate-500">Location:</span> <span className="font-medium text-slate-700">{gpsConfig.latitude}, {gpsConfig.longitude}</span></div>
+                    <div><span className="text-slate-500">WiFi:</span> <span className="font-medium text-slate-700">{gpsConfig.wifiBssid || 'Not Set'}</span></div>
+                  </div>
+                </div>
+              )}
 
               <Input
                 label="Class Duration (minutes)"

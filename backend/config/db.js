@@ -1,36 +1,39 @@
 const mysql = require('mysql2/promise')
 require('dotenv').config()
 
-let pool = null
-let dbAvailable = false
+let _pool = null
+let _available = false
 
-async function createPool() {
+// Try to connect — never crash the process on failure
+async function init() {
   try {
-    pool = mysql.createPool({
+    const pool = mysql.createPool({
       host:               process.env.DB_HOST     || 'localhost',
       port:               parseInt(process.env.DB_PORT) || 3306,
       user:               process.env.DB_USER     || 'root',
       password:           process.env.DB_PASSWORD || '',
-      database:           process.env.DB_NAME     || 'mku_attendance',
+      database:           process.env.DB_NAME     || 'cams_attendance',
       waitForConnections: true,
       connectionLimit:    10,
-      queueLimit:         0,
-      timezone:           '+00:00',
       connectTimeout:     3000,
+      timezone:           '+00:00',
     })
+    // Test the connection
     const conn = await pool.getConnection()
     conn.release()
-    dbAvailable = true
-    console.log('✅ MySQL connected successfully')
-  } catch (err) {
-    dbAvailable = false
-    pool = null
-    console.log('⚠️  MySQL not available — running in DEMO mode (in-memory data)')
+    _pool = pool
+    _available = true
+    console.log('✅  MySQL connected — using live database')
+  } catch {
+    _pool = null
+    _available = false
+    console.log('⚠️   MySQL unavailable — running in DEMO mode (in-memory data)')
   }
 }
 
-createPool()
+init()
 
-function isAvailable() { return dbAvailable }
-
-module.exports = { pool: () => pool, isAvailable }
+module.exports = {
+  pool:        () => _pool,
+  isAvailable: () => _available,
+}

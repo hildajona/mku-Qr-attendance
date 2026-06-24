@@ -6,7 +6,8 @@ import Button from '../../components/ui/Button'
 import { useSession } from '../../context/SessionContext'
 import { attendanceService } from '../../services/attendance.service'
 import { sessionService } from '../../services/session.service'
-import { Users, UserX, RefreshCw, StopCircle, Clock, ArrowLeft } from 'lucide-react'
+import { joinSession, leaveSession, onAttendanceUpdate } from '../../services/socket'
+import { Users, UserX, RefreshCw, StopCircle, Clock, ArrowLeft, CheckCircle2, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export default function LecturerAttendance() {
@@ -34,10 +35,10 @@ export default function LecturerAttendance() {
     }
   }
 
+  // Poll every 5 s while session is active + WebSocket real-time updates
   useEffect(() => {
     if (!sessionId) { setLoading(false); return }
 
-    // Load session details if not in context
     if (activeSession && activeSession.id === parseInt(sessionId)) {
       setSession(activeSession)
     } else {
@@ -48,9 +49,17 @@ export default function LecturerAttendance() {
 
     fetchAttendance(sessionId).finally(() => setLoading(false))
 
-    // Poll every 5 s while session is active
+    // Join socket room for real-time push
+    joinSession(sessionId)
+    const unsub = onAttendanceUpdate(() => fetchAttendance(sessionId))
+
+    // HTTP polling fallback every 5s
     pollRef.current = setInterval(() => fetchAttendance(sessionId), 5000)
-    return () => clearInterval(pollRef.current)
+    return () => {
+      clearInterval(pollRef.current)
+      leaveSession(sessionId)
+      unsub()
+    }
   }, [sessionId])
 
   // Sync from context attendees when they update (from Session page polling)
@@ -67,6 +76,22 @@ export default function LecturerAttendance() {
       fetchAttendance(sessionId)
     } catch {
       toast.error('Failed to mark absent')
+    }
+  }
+
+  const handleManualMarkPresent = async (record) => {
+    const reason = window.prompt(`Enter reason for manually marking ${record.student_name} as present (required):`)
+    if (reason === null) return // Canceled
+    if (!reason.trim()) {
+      toast.error('A reason is required for manual attendance override!')
+      return
+    }
+    try {
+      await attendanceService.markManual(sessionId, record.student_id, reason)
+      toast.success(`${record.student_name} marked present manually`)
+      fetchAttendance(sessionId)
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to mark present manually')
     }
   }
 
@@ -114,6 +139,10 @@ export default function LecturerAttendance() {
             <Button variant="secondary" size="sm" leftIcon={<RefreshCw size={14} />}
               onClick={() => fetchAttendance(sessionId)}>
               Refresh
+            </Button>
+            <Button variant="outline" size="sm" leftIcon={<Download size={14} />}
+              onClick={() => attendanceService.exportAttendance({ session_id: sessionId })}>
+              Export CSV
             </Button>
             {currentSession?.is_active && (
               <Button variant="danger" size="sm" leftIcon={<StopCircle size={14} />}
@@ -182,7 +211,16 @@ export default function LecturerAttendance() {
                   {list.map((r, i) => (
                     <tr key={r.id || i} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                       <td className="px-5 py-3 text-slate-400 text-xs">{i + 1}</td>
-                      <td className="px-5 py-3 font-medium text-slate-700">{r.student_name}</td>
+                      <td className="px-5 py-3 font-medium text-slate-700">
+                        <div className="flex items-center gap-2">
+                          <span>{r.student_name}</span>
+                          {(r.has_smartphone === false || r.has_smartphone === 0) && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 animate-pulse">
+                              USSD Preferred
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-5 py-3 text-slate-500 font-mono text-xs">{r.reg_number}</td>
                       <td className="px-5 py-3 text-slate-500">
                         <div className="flex items-center gap-1">
@@ -192,16 +230,35 @@ export default function LecturerAttendance() {
                             : '—'}
                         </div>
                       </td>
-                      <td className="px-5 py-3"><StatusBadge status={r.status} /></td>
                       <td className="px-5 py-3">
-                        {r.status !== 'absent' && currentSession?.is_active && (
-                          <button
-                            onClick={() => handleMarkAbsent(r)}
-                            className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors"
-                          >
-                            <UserX size={12} /> Mark Absent
-                          </button>
-                        )}
+                        <div className="flex flex-col gap-0.5">
+                          <StatusBadge status={r.status} />
+                          {r.attendance_method && r.attendance_method !== 'qr' && (
+                            <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
+                              via {r.attendance_method}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex gap-2">
+                          {r.status !== 'absent' && currentSession?.is_active && (
+                            <button
+                              onClick={() => handleMarkAbsent(r)}
+                              className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors"
+                            >
+                              <UserX size={12} /> Mark Absent
+                            </button>
+                          )}
+                          {(r.status === 'absent' || !r.status) && currentSession?.is_active && (
+                            <button
+                              onClick={() => handleManualMarkPresent(r)}
+                              className="flex items-center gap-1 text-xs text-green-600 hover:text-green-800 hover:bg-green-50 px-2 py-1 rounded-lg transition-colors"
+                            >
+                              <CheckCircle2 size={12} /> Manual Override
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

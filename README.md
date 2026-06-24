@@ -1,168 +1,148 @@
-# MKU QR Code Attendance System
+# CAMS — Campus Attendance Management System
 
-A complete, production-ready QR Code Attendance System for Mount Kenya University.
+A complete, production-ready QR Code Attendance System.
+
+---
 
 ## Tech Stack
 
-- **Frontend**: React + Vite + Tailwind CSS
-- **Backend**: Node.js + Express
-- **Database**: MySQL
-- **Auth**: JWT (role-based)
-- **QR**: qrcode.js (generate) + jsQR (scan)
-- **Charts**: Chart.js + react-chartjs-2
-- **Export**: jsPDF + PapaParse
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19 + Vite + Tailwind CSS |
+| Routing | React Router v6 (role-based guards) |
+| QR Generate | qrcode.js |
+| QR Scan | jsQR (camera-based, browser-native) |
+| Charts | Chart.js + react-chartjs-2 |
+| Export | jsPDF + PapaParse (PDF + CSV) |
+| HTTP Client | Axios + JWT interceptor |
+| Auth | JWT tokens, role-encoded |
+| Backend | Node.js + Express |
+| Database | MySQL (optional — demo mode works without it) |
 
 ---
 
 ## Quick Start
 
-### 1. Database Setup
-
-Install MySQL and run the schema:
-
-```bash
-mysql -u root -p < backend/config/schema.sql
-```
-
-Copy the example environment file and update your values:
-
-```bash
-cp .env.example backend/.env
-```
-
-Then edit `backend/.env` with your database credentials:
-
-```
-PORT=5000
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=your_password
-DB_NAME=mku_attendance
-JWT_SECRET=your_jwt_secret_here
-```
-
-### 2. Seed Test Data
-
-Run the backend seed script to populate sample users, courses, units, enrollments, and sessions:
-
-```bash
-cd backend
-npm install
-npm run seed
-```
-
-### 3. Start the Backend
+### 1. Start the backend
 
 ```bash
 cd backend
 npm install
 npm run dev
+# Runs on http://localhost:5000
 ```
 
-Backend runs on: http://localhost:5000
+> No MySQL? No problem. The backend runs fully in **demo mode** with in-memory data.
 
-### 3. Start the Frontend
+### 2. Start the frontend
 
 ```bash
-# In the mku-attendance root folder
+# From the project root
 npm install
 npm run dev
+# Runs on http://localhost:5173
 ```
 
-Frontend runs on: http://localhost:5173
+Open **http://localhost:5173** in your browser.
 
----
-
-## Deploying Frontend to Netlify
-
-This project can be deployed as a static Vite app on Netlify. The backend must remain hosted separately, and the frontend will call it through the `VITE_API_BASE_URL` environment variable.
-
-1. Push the `mku-attendance` repo to GitHub.
-2. Create a new Netlify site from the GitHub repo.
-3. Use the default build settings:
-   - Build command: `npm run build`
-   - Publish directory: `dist`
-4. In Netlify site settings, add an environment variable:
-   - `VITE_API_BASE_URL` = your backend URL, e.g. `https://attendance-backend.example.com`
-5. If you want Netlify to proxy `/api/*` to your backend, the included `netlify.toml` already contains the redirect rule.
-
-To test locally before deploying, keep the frontend on `http://localhost:5173` and the backend on `http://localhost:5000`.
+For the full MKU-CAMS schema, ERD, API endpoint map, and role-based architecture, see `MKU-CAMS-Blueprint.md`.
 
 ---
 
 ## Demo Credentials
 
-| Role     | Login                    | Password     |
-|----------|--------------------------|--------------|
-| Admin    | admin@mku.ac.ke          | admin123     |
-| Lecturer | lecturer@mku.ac.ke       | lecturer123  |
-| Student  | SCT211-0001/2024         | student123   |
+| Role     | Login                   | Password     |
+|----------|-------------------------|--------------|
+| Admin    | admin@cams.ac.ke        | admin123     |
+| Lecturer | lecturer@cams.ac.ke     | lecturer123  |
+| Student  | SCT211-0001/2024        | student123   |
 
 ---
 
-## Features
+## How the QR Flow Works
 
-### Admin Portal
+1. **Lecturer** logs in → goes to **Start Session** → selects unit + room → clicks **Generate QR**
+2. A unique UUID token is created and stored; a QR code is rendered encoding `{ token, session_id, expires_at }`
+3. Lecturer projects the QR fullscreen for the class
+4. **Student** logs in → taps **Scan QR** → camera opens → points at the projected QR
+5. App decodes QR → POSTs `{ token, student_id }` to `/api/attendance/mark`
+6. Backend validates: session active? token matches? not expired? student enrolled? not already scanned?
+7. If all pass → attendance recorded → student sees green success screen
+8. QR auto-regenerates every 5 minutes (configurable) to prevent sharing
+
+---
+
+## Roles & Portals
+
+### Admin
 - Dashboard with system-wide metrics
 - Manage students (add, edit, deactivate, bulk CSV import)
 - Manage lecturers (add, edit, reset password)
 - Courses & Units management
-- Attendance reports with PDF/CSV export
-- System settings (QR expiry, university name)
+- Attendance reports — PDF & CSV export
+- System settings (QR expiry, university name, thresholds)
 
-### Lecturer Portal
-- Dashboard with today's sessions
+### Lecturer
+- Dashboard with today's sessions and live stats
 - View assigned courses and units
-- Create class sessions with time-limited QR codes
-- Fullscreen QR projector mode
-- Live attendance list (polls every 5s)
+- Create sessions with time-limited QR codes
+- Fullscreen QR projector mode with scan count
+- Live attendance list (auto-polls every 5 s)
 - Mark students absent manually
-- Export reports by unit/date
+- Export reports by unit and date range
 
-### Student Portal
-- Dashboard with attendance % per unit (doughnut charts)
-- QR Scanner (camera-based, browser-native)
+### Student
+- Dashboard showing attendance % per unit (doughnut charts)
+- QR Scanner — camera feed, jsQR decode, instant feedback
 - Attendance history with calendar heatmap
 - Profile and password change
+
+---
+
+## MySQL Setup (optional)
+
+```sql
+-- In MySQL:
+source backend/config/schema.sql
+```
+
+Update `backend/.env`:
+
+```
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_password
+DB_NAME=cams_attendance
+```
+
+The backend auto-connects; no restart needed if you set it up after starting.
 
 ---
 
 ## Project Structure
 
 ```
-mku-attendance/
+cams/
 ├── src/
 │   ├── components/
-│   │   ├── ui/          # Button, Input, Modal, StatusBadge, MetricCard, SessionCard
-│   │   ├── layout/      # Sidebar, TopBar, PageWrapper, AuthGuard
-│   │   ├── qr/          # QRGenerator, QRScanner, CountdownTimer
-│   │   ├── charts/      # AttendanceChart, DoughnutChart, CalendarHeatmap
-│   │   └── tables/      # DataTable, ExportPanel
+│   │   ├── ui/        Button, Input, Modal, StatusBadge, MetricCard, SessionCard
+│   │   ├── layout/    Sidebar, TopBar, PageWrapper, AuthGuard
+│   │   ├── qr/        QRGenerator, QRScanner, CountdownTimer
+│   │   ├── charts/    AttendanceChart, DoughnutChart, CalendarHeatmap
+│   │   └── tables/    DataTable, ExportPanel
 │   ├── pages/
-│   │   ├── auth/        # Login
-│   │   ├── admin/       # Dashboard, Students, Lecturers, Courses, Reports, Settings
-│   │   ├── lecturer/    # Dashboard, Courses, Session, Attendance, Export
-│   │   └── student/     # Dashboard, Scanner, History, Profile
-│   ├── context/         # AuthContext, SessionContext
-│   ├── hooks/           # useAuth, useTimer, useCamera, useAttendance, useQR
-│   ├── services/        # api.js, auth/user/session/attendance services
-│   ├── utils/           # qr.utils.js, export.utils.js
-│   └── router/          # index.jsx (all routes with role guards)
+│   │   ├── auth/      Login
+│   │   ├── admin/     Dashboard, Students, Lecturers, Courses, Reports, Settings
+│   │   ├── lecturer/  Dashboard, Courses, Session, Attendance, Export
+│   │   └── student/   Dashboard, Scanner, History, Profile
+│   ├── context/       AuthContext, SessionContext
+│   ├── hooks/         useAuth, useTimer, useCamera, useAttendance, useQR
+│   ├── services/      api.js + auth/user/session/attendance services
+│   ├── utils/         qr.utils.js, export.utils.js
+│   └── router/        index.jsx (all routes + role guards)
 └── backend/
-    ├── config/          # db.js, schema.sql
-    ├── middleware/       # auth.js (JWT + role)
-    ├── routes/          # auth, admin, courses, sessions, attendance
+    ├── config/        db.js, mockData.js, schema.sql
+    ├── middleware/     auth.js (JWT + role enforcement)
+    ├── routes/        auth, admin, courses, sessions, attendance
     └── server.js
 ```
-
----
-
-## QR Security Flow
-
-1. Lecturer creates session → backend generates UUID token stored in DB
-2. QR encodes: `{ token, session_id, expires_at }`
-3. Student scans → POST `/api/attendance/mark` with `{ token, student_id }`
-4. Backend validates: session exists? token matches? not expired? student enrolled? not already scanned?
-5. If all pass → insert attendance record → return success
-6. QR auto-regenerates when timer hits 0 (new token, same session)

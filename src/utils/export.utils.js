@@ -29,7 +29,7 @@ export function downloadPDF({
   columns = [],
   rows = [],
   filename = 'report.pdf',
-  universityName = 'Mount Kenya University',
+  universityName = 'CAMS – Campus Attendance Management System',
 }) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()

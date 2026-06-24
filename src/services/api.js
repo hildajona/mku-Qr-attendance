@@ -1,15 +1,15 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: '/api',
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Attach JWT to every request
+// Attach JWT to every request — support both key names
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('mku_token')
+    const token = localStorage.getItem('cams_token') || localStorage.getItem('mku_token')
     if (token) config.headers.Authorization = `Bearer ${token}`
     return config
   },
@@ -21,7 +21,9 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      localStorage.removeItem('cams_token')
       localStorage.removeItem('mku_token')
+      localStorage.removeItem('cams_user')
       localStorage.removeItem('mku_user')
       window.location.href = '/login'
     }

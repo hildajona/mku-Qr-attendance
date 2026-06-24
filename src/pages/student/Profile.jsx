@@ -66,6 +66,20 @@ export default function Profile() {
           <InfoRow icon={Mail} label="Email" value={user?.email} />
           <InfoRow icon={Hash} label="Registration Number" value={user?.reg_number} />
           <InfoRow icon={BookOpen} label="Course" value={user?.course} />
+          {user?.role === 'student' && (
+            <>
+              <InfoRow 
+                icon={User} 
+                label="Smartphone Status" 
+                value={user?.has_smartphone !== false && user?.has_smartphone !== 0 ? '📱 Yes (QR Scanning active)' : '📵 No (USSD/SMS Fallback active)'} 
+              />
+              <InfoRow 
+                icon={BookOpen} 
+                label="Preferred Attendance Method" 
+                value={(user?.preferred_attendance_method || 'QR').toUpperCase()} 
+              />
+            </>
+          )}
         </div>
 
         {/* Change password */}

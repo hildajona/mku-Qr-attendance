@@ -1,49 +1,59 @@
 /**
- * Generate a QR payload object
- * @param {number} sessionId
- * @param {number|null} courseId
- * @param {number|null} lecturerId
- * @param {number} expirySeconds - seconds until expiry
- * @returns {{ token: string, secure_token: string, session_id: number, course_id: number|null, lecturer_id: number|null, expires_at: string }}
+ * Generate a QR payload object (client-side, for fallback)
  */
-export function generateQRPayload(sessionId, courseId = null, lecturerId = null, expirySeconds = 300) {
-  const token = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36)
+export function generateQRPayload(sessionId, expirySeconds = 300) {
+  const token = crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).substring(2) + Date.now().toString(36)
   const expires_at = new Date(Date.now() + expirySeconds * 1000).toISOString()
-  return { token, secure_token: token, session_id: sessionId, course_id: courseId, lecturer_id: lecturerId, expires_at }
+  return { token, session_id: sessionId, expires_at }
 }
 
 /**
- * Encode payload to a JSON string for embedding in QR
+ * Encode payload to JSON string for embedding in QR image
  */
 export function encodeQRPayload(payload) {
-  return JSON.stringify(payload)
+  return typeof payload === 'string' ? payload : JSON.stringify(payload)
 }
 
 /**
- * Decode a scanned QR string back to payload object
- * Returns null if invalid
+ * Decode a scanned QR string.
+ * Handles both JSON payloads and raw JWT strings.
+ * Returns null if completely unrecognisable.
  */
 export function decodeQRPayload(raw) {
+  if (!raw) return null
   try {
     const payload = JSON.parse(raw)
-    if (!payload.token || !payload.secure_token || !payload.session_id || !payload.expires_at) return null
-    if (payload.token !== payload.secure_token) return null
+    if (!payload.token) return null
     return payload
   } catch {
+    // Not JSON — treat as raw JWT token
+    if (typeof raw === 'string' && raw.split('.').length === 3) {
+      return { token: raw }
+    }
     return null
   }
+}
+
+/**
+ * Alias used by the enterprise scanner.
+ * Same as decodeQRPayload.
+ */
+export function verifyQRPayload(raw) {
+  return decodeQRPayload(raw)
 }
 
 /**
  * Check if a QR payload is still valid (not expired)
  */
 export function isQRValid(payload) {
-  if (!payload?.expires_at) return false
+  if (!payload?.expires_at) return true // JWT — server validates
   return new Date(payload.expires_at) > new Date()
 }
 
 /**
- * Get remaining seconds from a QR payload
+ * Get remaining seconds from an expiry date string
  */
 export function getRemainingSeconds(expiresAt) {
   const diff = new Date(expiresAt) - new Date()
