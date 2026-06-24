@@ -135,7 +135,7 @@ export default function Login() {
                 id="login-identifier"
                 label="Email or Registration Number"
                 type="text"
-                placeholder="admin@cams.ac.ke  or  SCT211-0001/2024"
+                placeholder="Enter your email or registration number"
                 value={identifier}
                 onChange={e => setIdentifier(e.target.value)}
                 leftIcon={<Mail size={16} />}
@@ -182,28 +182,6 @@ export default function Login() {
             <p className="text-xs text-center mt-4" style={{ color: '#9CA3AF' }}>
               CAMS © {new Date().getFullYear()} — Mount Kenya University
             </p>
-          </div>
-
-          {/* Demo hint */}
-          <div className="mt-5 p-4 bg-white rounded-2xl border" style={{ borderColor: '#D1D5DB' }}>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full" style={{ background: '#FFC107' }} />
-              <p className="text-xs font-bold uppercase tracking-wide" style={{ color: '#6B7280' }}>Demo Accounts</p>
-            </div>
-            <div className="space-y-1.5 text-xs" style={{ color: '#6B7280' }}>
-              {[
-                { role: 'Admin',    cred: 'admin@cams.ac.ke / admin123' },
-                { role: 'Lecturer', cred: 'lecturer@cams.ac.ke / lecturer123' },
-                { role: 'HOD',      cred: 'hod@cams.ac.ke / lecturer123' },
-                { role: 'Student',  cred: 'SCT211-0001/2024 / student123' },
-              ].map(({ role, cred }) => (
-                <div key={role} className="flex justify-between items-center">
-                  <span className="font-semibold px-2 py-0.5 rounded-full text-white text-[10px]"
-                    style={{ background: '#0057A8' }}>{role}</span>
-                  <span className="font-mono">{cred}</span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </div>
