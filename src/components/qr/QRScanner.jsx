@@ -150,19 +150,24 @@ export default function QRScanner({ onScan, onError, active = true }) {
         )}
       </div>
 
-      {/* Hidden canvas for decoding - positioned off-screen to prevent mobile browser display:none blank pixel optimizations */}
-      <canvas ref={canvasRef} style={{ position: 'absolute', left: '-9999px', top: '-9999px' }} />
+      {/* Hidden canvas for decoding - opacity 0 avoids iOS Safari display:none/offscreen drawImage optimizations */}
+      <div className="absolute inset-0 pointer-events-none opacity-0 overflow-hidden">
+        <canvas ref={canvasRef} />
+      </div>
 
       {scanning && (
-        <>
-          <p className="text-center text-sm text-slate-500 mt-3">
+        <div className="mt-3">
+          <p className="text-center text-sm text-slate-500 mb-1">
             Point your camera at the QR code
           </p>
+          {/* Debug frame counter - visible so user can verify if camera is decoding */}
           <div
             ref={debugRef}
-            style={{ fontSize: '10px', color: '#94a3b8', textAlign: 'center', marginTop: '8px', fontFamily: 'monospace' }}
-          />
-        </>
+            className="bg-black/80 text-green-400 text-[10px] font-mono px-2 py-1 rounded-md text-center mx-auto w-fit"
+          >
+            Starting decoder...
+          </div>
+        </div>
       )}
     </div>
   )
