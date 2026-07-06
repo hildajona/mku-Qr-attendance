@@ -140,7 +140,7 @@ router.post('/check-in', checkInLimiter, authenticate, requireRole('student'), a
           [session.id, sid, status, device_fingerprint || null, req.ip, lat || null, lng || null]
         )
         await redis.invalidateCount(session.id)
-        const [[student]] = await db.query('SELECT name, reg_number FROM users WHERE id=?', [sid])
+        const [[student]] = await db.query('SELECT full_name as name, reg_number FROM users WHERE id=?', [sid])
         // Emit real-time update to all clients watching this session
         const io = req.app.get('io')
         if (io) {
