@@ -24,8 +24,8 @@ export default function QRGenerator({ payload, size = 280, className = '' }) {
     QRCode.toCanvas(canvas, data, {
       width: size,
       margin: 2,
-      color: { dark: '#0F172A', light: '#FFFFFF' },
-      errorCorrectionLevel: 'H',
+      color: { dark: '#000000', light: '#FFFFFF' },
+      errorCorrectionLevel: 'M',
     })
       .then(() => setReady(true))
       .catch(err => setError(err.message))
