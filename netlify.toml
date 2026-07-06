@@ -4,11 +4,11 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  VITE_API_BASE_URL = "https://your-backend-host.example.com"
+  VITE_API_BASE_URL = "https://mku-qr-attendance-1.onrender.com"
 
 [[redirects]]
   from = "/api/*"
-  to = "https://your-backend-host.example.com/:splat"
+  to = "https://mku-qr-attendance-1.onrender.com/api/:splat"
   status = 200
   force = true
 

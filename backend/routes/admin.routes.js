@@ -436,12 +436,30 @@ router.put('/settings', isAdmin, async (req, res) => {
     if (isAvailable()) {
       const db = pool()
       await db.query(
-        `INSERT INTO settings (id,university_name,qr_expiry_seconds,email_notifications,low_attendance_threshold,allow_late_marking,late_threshold_minutes)
-         VALUES (1,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE
-         university_name=VALUES(university_name),qr_expiry_seconds=VALUES(qr_expiry_seconds),
-         email_notifications=VALUES(email_notifications),low_attendance_threshold=VALUES(low_attendance_threshold),
-         allow_late_marking=VALUES(allow_late_marking),late_threshold_minutes=VALUES(late_threshold_minutes)`,
-        [fields.university_name, fields.qr_expiry_seconds, fields.email_notifications, fields.low_attendance_threshold, fields.allow_late_marking, fields.late_threshold_minutes]
+        `INSERT INTO settings (
+           id, university_name, qr_expiry_seconds, email_notifications,
+           low_attendance_threshold, allow_late_marking, late_threshold_minutes,
+           geo_check_enabled, institution_lat, institution_lng, institution_radius_meters
+         ) VALUES (1,?,?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE
+           university_name=VALUES(university_name),
+           qr_expiry_seconds=VALUES(qr_expiry_seconds),
+           email_notifications=VALUES(email_notifications),
+           low_attendance_threshold=VALUES(low_attendance_threshold),
+           allow_late_marking=VALUES(allow_late_marking),
+           late_threshold_minutes=VALUES(late_threshold_minutes),
+           geo_check_enabled=VALUES(geo_check_enabled),
+           institution_lat=VALUES(institution_lat),
+           institution_lng=VALUES(institution_lng),
+           institution_radius_meters=VALUES(institution_radius_meters)`,
+        [
+          fields.university_name, fields.qr_expiry_seconds, fields.email_notifications,
+          fields.low_attendance_threshold, fields.allow_late_marking, fields.late_threshold_minutes,
+          fields.geo_check_enabled ? 1 : 0,
+          fields.institution_lat || null,
+          fields.institution_lng || null,
+          fields.institution_radius_meters || 200
+        ]
       )
       return res.json({ message: 'Settings saved' })
     }

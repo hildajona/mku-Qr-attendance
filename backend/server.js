@@ -26,10 +26,37 @@ const announcementsRoutes  = require('./routes/announcements.routes')
 const notificationsRoutes  = require('./routes/notifications.routes')
 const ussdRoutes           = require('./routes/ussd.routes')
 const smsRoutes            = require('./routes/sms.routes')
+const sheetsRoutes         = require('./routes/sheets.routes')
+
 
 const app    = express()
 const server = http.createServer(app)
 const PORT   = process.env.PORT || 5000
+
+// ── Auto-migrate: ensure geo columns exist in settings ─────────────────────
+// This runs once at startup so the check-in route never crashes with
+// "Unknown column 'geo_check_enabled'" when the migration SQL wasn't run.
+async function ensureGeoColumns() {
+  try {
+    const { pool, isAvailable } = require('./config/db')
+    if (!isAvailable()) return
+    const db = pool()
+    await db.query(`ALTER TABLE settings
+      ADD COLUMN IF NOT EXISTS geo_check_enabled        TINYINT(1)    NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS institution_lat           DECIMAL(10,7) NULL,
+      ADD COLUMN IF NOT EXISTS institution_lng           DECIMAL(10,7) NULL,
+      ADD COLUMN IF NOT EXISTS institution_radius_meters INT           NOT NULL DEFAULT 200`).catch(() => {})
+    await db.query(`ALTER TABLE settings
+      ADD COLUMN IF NOT EXISTS allow_late_marking        TINYINT(1)    NOT NULL DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS max_scan_attempts          INT           NOT NULL DEFAULT 3`).catch(() => {})
+    // Ensure settings seed row exists
+    await db.query(`INSERT IGNORE INTO settings (id) VALUES (1)`).catch(() => {})
+    console.log('[startup] Settings table geo columns verified.')
+  } catch (err) {
+    console.warn('[startup] Could not verify geo columns (non-fatal):', err.message)
+  }
+}
+ensureGeoColumns()
 
 // ── WebSocket (real-time attendance updates) ───────────────────────────────
 const io = new Server(server, {
@@ -96,6 +123,8 @@ app.use('/api/announcements', announcementsRoutes)
 app.use('/api/notifications', notificationsRoutes)
 app.use('/api/ussd',          ussdRoutes)
 app.use('/api/sms',           smsRoutes)
+app.use('/api/sheets',        sheetsRoutes)
+
 
 // ── Health check ───────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

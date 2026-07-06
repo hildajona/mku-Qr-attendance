@@ -180,13 +180,18 @@ const lecturerAssignments = [
 ]
 
 const now = Date.now()
+
+// Generate a real JWT token for the active demo session so verifyQRToken() works
+const { generateQRToken } = require('../utils/qrToken')
+const { token: activeToken, expires_at: activeExpiry } = generateQRToken('1', 3600) // 1 hour
+
 const sessions = [
   {
     id: 1, unit_id: 1, lecturer_id: 2, room: 'LH-3',
     started_at: new Date(now - 1800000).toISOString(),
-    expires_at: new Date(now + 300000).toISOString(),
-    duration_minutes: 60, qr_token: 'demo-active-token-001',
-    qr_expiry_seconds: 300, is_active: true, ended_at: null,
+    expires_at: activeExpiry,
+    duration_minutes: 60, qr_token: activeToken,
+    qr_expiry_seconds: 3600, is_active: true, ended_at: null,
   },
   {
     id: 2, unit_id: 2, lecturer_id: 2, room: 'Lab-2',
@@ -232,6 +237,10 @@ const settings = {
   low_attendance_threshold: 75,
   allow_late_marking: true,
   late_threshold_minutes: 15,
+  geo_check_enabled: false,
+  institution_lat: null,
+  institution_lng: null,
+  institution_radius_meters: 200,
 }
 
 const nextId = {

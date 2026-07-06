@@ -7,8 +7,8 @@ export const attendanceService = {
       token,
       student_id: studentId,
       device_fingerprint: extras.fingerprint || getFingerprint(),
-      lat: extras.lat || null,
-      lng: extras.lng || null,
+      lat: (extras.lat !== undefined && extras.lat !== null) ? extras.lat : null,
+      lng: (extras.lng !== undefined && extras.lng !== null) ? extras.lng : null,
     }),
 
   // Backwards compat alias

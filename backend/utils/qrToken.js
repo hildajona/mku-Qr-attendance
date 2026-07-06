@@ -20,7 +20,7 @@ function generateQRToken(sessionId, expirySeconds = 300) {
     SECRET,
     { expiresIn: expirySeconds }
   )
-  const expires_at = new Date(Date.now() + expirySeconds * 1000).toISOString()
+  const expires_at = new Date(Date.now() + expirySeconds * 1000).toISOString().slice(0, 19).replace('T', ' ')
   return { token, expires_at }
 }
 
@@ -31,9 +31,13 @@ function generateQRToken(sessionId, expirySeconds = 300) {
  */
 function verifyQRToken(token) {
   try {
-    return jwt.verify(token, SECRET)
-  } catch {
-    return null
+    const decoded = jwt.verify(token, SECRET)
+    return { decoded, error: null }
+  } catch (err) {
+    if (err && err.name === 'TokenExpiredError') {
+      return { decoded: null, error: 'expired' }
+    }
+    return { decoded: null, error: 'invalid' }
   }
 }
 

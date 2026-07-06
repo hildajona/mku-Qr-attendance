@@ -24,9 +24,10 @@ async function init() {
     _pool = pool
     _available = true
     console.log('✅  MySQL connected — using live database')
-  } catch {
+  } catch (err) {
     _pool = null
     _available = false
+    console.error('⚠️   MySQL connection failed:', err.message)
     console.log('⚠️   MySQL unavailable — running in DEMO mode (in-memory data)')
   }
 }

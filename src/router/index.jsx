@@ -20,6 +20,8 @@ import AdminAnalytics     from '../pages/admin/Analytics'
 import AdminDepartments   from '../pages/admin/Departments'
 import AdminUnits         from '../pages/admin/Units'
 import AdminSessions      from '../pages/admin/Sessions'
+import AdminGoogleSheetsSync from '../pages/admin/GoogleSheetsSync'
+
 
 // Lecturer
 import LecturerDashboard  from '../pages/lecturer/Dashboard'
@@ -65,6 +67,8 @@ export default function AppRouter() {
       <Route path="/admin/reports"      element={<AuthGuard allowedRoles={['admin']}><AdminReports /></AuthGuard>} />
       <Route path="/admin/analytics"    element={<AuthGuard allowedRoles={['admin']}><AdminAnalytics /></AuthGuard>} />
       <Route path="/admin/settings"     element={<AuthGuard allowedRoles={['admin']}><AdminSettings /></AuthGuard>} />
+      <Route path="/admin/sheets-sync" element={<AuthGuard allowedRoles={['admin']}><AdminGoogleSheetsSync /></AuthGuard>} />
+
       {/* Legacy routes preserved */}
       <Route path="/admin/courses"      element={<AuthGuard allowedRoles={['admin']}><AdminCourses /></AuthGuard>} />
       <Route path="/admin/registrations"element={<AuthGuard allowedRoles={['admin']}><AdminRegistrations /></AuthGuard>} />

@@ -160,16 +160,19 @@ CREATE TABLE IF NOT EXISTS scan_attempts (
 
 -- ── System settings ────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS settings (
-  id                       INT          NOT NULL DEFAULT 1,
-  university_name          VARCHAR(255) NOT NULL DEFAULT 'CAMS – Campus Attendance Management System',
-  qr_expiry_seconds        INT          NOT NULL DEFAULT 300,
-  email_notifications      TINYINT(1)   NOT NULL DEFAULT 1,
-  low_attendance_threshold INT          NOT NULL DEFAULT 75,
-  allow_late_marking       TINYINT(1)   NOT NULL DEFAULT 1,
-  late_threshold_minutes   INT          NOT NULL DEFAULT 15,
-  max_scan_attempts        INT          NOT NULL DEFAULT 3,
-  geo_check_enabled        TINYINT(1)   NOT NULL DEFAULT 0,
-  updated_at               DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  id                          INT          NOT NULL DEFAULT 1,
+  university_name             VARCHAR(255) NOT NULL DEFAULT 'CAMS – Campus Attendance Management System',
+  qr_expiry_seconds           INT          NOT NULL DEFAULT 300,
+  email_notifications         TINYINT(1)   NOT NULL DEFAULT 1,
+  low_attendance_threshold    INT          NOT NULL DEFAULT 75,
+  allow_late_marking          TINYINT(1)   NOT NULL DEFAULT 1,
+  late_threshold_minutes      INT          NOT NULL DEFAULT 15,
+  max_scan_attempts           INT          NOT NULL DEFAULT 3,
+  geo_check_enabled           TINYINT(1)   NOT NULL DEFAULT 0,
+  institution_lat             DECIMAL(10,7) NULL,
+  institution_lng             DECIMAL(10,7) NULL,
+  institution_radius_meters   INT          NOT NULL DEFAULT 200,
+  updated_at                  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB;
 

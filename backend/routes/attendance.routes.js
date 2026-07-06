@@ -27,9 +27,12 @@ router.post('/check-in', checkInLimiter, authenticate, requireRole('student'), a
   if (!token) return res.status(400).json({ message: 'QR token is required' })
 
   // ── Step 1: Verify JWT signature + expiry ──────────────────────────────
-  const decoded = verifyQRToken(token)
-  if (!decoded) {
-    return res.status(401).json({ message: 'QR code is invalid or has expired. Ask your lecturer to refresh it.' })
+  const { decoded, error } = verifyQRToken(token)
+  if (error) {
+    if (error === 'expired') {
+      return res.status(400).json({ message: 'QR code has expired. Ask your lecturer to refresh it.' })
+    }
+    return res.status(400).json({ message: 'This QR code is invalid. Ask your lecturer to refresh it.' })
   }
   const sessionId = decoded.sid
 
@@ -38,7 +41,7 @@ router.post('/check-in', checkInLimiter, authenticate, requireRole('student'), a
     const cachedSession = await redis.getTokenSession(token)
     // If Redis says it's gone (lecturer regenerated), reject immediately
     if (redis.isAvailable() && cachedSession === null) {
-      return res.status(401).json({ message: 'This QR code has been replaced. Scan the new one.' })
+      return res.status(400).json({ message: 'This QR code has been replaced. Scan the new one.' })
     }
 
     // ── Step 3: Per-student rate limiting (max 3 attempts) ─────────────
@@ -54,7 +57,9 @@ router.post('/check-in', checkInLimiter, authenticate, requireRole('student'), a
       // ── Step 4a: DB — validate session ──────────────────────────────
       const [[session]] = await db.query(
         `SELECT s.*, u.name as unit_name, u.id as unit_id,
-                se.late_threshold_minutes, se.allow_late_marking, se.max_scan_attempts
+                se.late_threshold_minutes, se.allow_late_marking, se.max_scan_attempts,
+                se.geo_check_enabled,
+                se.institution_lat, se.institution_lng, se.institution_radius_meters
          FROM sessions s
          JOIN units u ON u.id=s.unit_id
          LEFT JOIN settings se ON se.id=1
@@ -63,7 +68,52 @@ router.post('/check-in', checkInLimiter, authenticate, requireRole('student'), a
       if (!session) return res.status(404).json({ message: 'Session not found for this QR code.' })
       if (!session.is_active) return res.status(400).json({ message: 'This session has ended.' })
       if (new Date(session.expires_at) < new Date()) {
-        return res.status(401).json({ message: 'QR code has expired. Ask your lecturer to refresh it.' })
+        return res.status(400).json({ message: 'QR code has expired. Ask your lecturer to refresh it.' })
+      }
+
+      // ── Geolocation Check ───────────────────────────────────────────
+      // Only enforce geo when explicitly enabled (=1). null / 0 = geo off.
+      const geoCheckEnabled = session.geo_check_enabled === 1
+
+      // Determine which coordinates to use:
+      // Priority 1 — session/venue-specific coordinates
+      // Priority 2 — institution-wide location set by admin in Settings
+      let geoLat = session.lat
+      let geoLng = session.lng
+      let geoRadius = session.radius_meters || 100
+      let usingInstitutionLocation = false
+
+      if ((geoLat === null || geoLng === null) && session.institution_lat && session.institution_lng) {
+        geoLat = session.institution_lat
+        geoLng = session.institution_lng
+        geoRadius = session.institution_radius_meters || 200
+        usingInstitutionLocation = true
+      }
+
+      if (geoCheckEnabled && geoLat !== null && geoLng !== null) {
+        if (lat === null || lng === null || lat === undefined || lng === undefined) {
+          return res.status(400).json({ message: 'Location access is required to check in for this session. Please enable GPS.' })
+        }
+
+        // Haversine formula
+        const R = 6371e3; // Earth's radius in meters
+        const phi1 = parseFloat(geoLat) * Math.PI / 180
+        const phi2 = parseFloat(lat) * Math.PI / 180
+        const deltaPhi = (parseFloat(lat) - parseFloat(geoLat)) * Math.PI / 180
+        const deltaLambda = (parseFloat(lng) - parseFloat(geoLng)) * Math.PI / 180
+
+        const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+                  Math.cos(phi1) * Math.cos(phi2) *
+                  Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2)
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        const distance = R * c // distance in meters
+
+        if (distance > geoRadius) {
+          const locationLabel = usingInstitutionLocation ? 'institution campus' : 'venue'
+          return res.status(400).json({
+            message: `You are not within the required ${locationLabel} location. Detected distance: ${Math.round(distance)}m (allowed radius: ${geoRadius}m).`
+          })
+        }
       }
 
       // ── Step 4b: Enrollment check ───────────────────────────────────
@@ -114,7 +164,35 @@ router.post('/check-in', checkInLimiter, authenticate, requireRole('student'), a
     const session = mock.sessions.find(s => s.qr_token === token)
     if (!session) return res.status(404).json({ message: 'Session not found for this QR code.' })
     if (!session.is_active) return res.status(400).json({ message: 'This session has ended.' })
-    if (new Date(session.expires_at) < new Date()) return res.status(401).json({ message: 'QR code has expired.' })
+    if (new Date(session.expires_at) < new Date()) return res.status(400).json({ message: 'QR code has expired.' })
+
+    // ── Mock Geolocation Check ─────────────────────────────────────────
+    // Only enforce geo when explicitly enabled (true/1). false/null/0 = off.
+    const geoCheckEnabled = (mock.settings && (mock.settings.geo_check_enabled === true || mock.settings.geo_check_enabled === 1));
+    if (geoCheckEnabled && session.lat !== undefined && session.lat !== null && session.lng !== undefined && session.lng !== null) {
+      if (lat === null || lng === null || lat === undefined || lng === undefined) {
+        return res.status(400).json({ message: 'Location access is required to check in for this session. Please enable GPS.' })
+      }
+      
+      const R = 6371e3; // Earth's radius in meters
+      const phi1 = session.lat * Math.PI / 180;
+      const phi2 = lat * Math.PI / 180;
+      const deltaPhi = (lat - session.lat) * Math.PI / 180;
+      const deltaLambda = (lng - session.lng) * Math.PI / 180;
+
+      const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+                Math.cos(phi1) * Math.cos(phi2) *
+                Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distance = R * c;
+
+      const allowedRadius = session.radius_meters || 50;
+      if (distance > allowedRadius) {
+        return res.status(400).json({
+          message: `You are not within the required venue location. Detected distance: ${Math.round(distance)}m (allowed radius: ${allowedRadius}m).`
+        })
+      }
+    }
     const enrolled = mock.enrollments.find(e => String(e.student_id) === String(sid) && e.unit_id === session.unit_id)
     if (!enrolled) return res.status(403).json({ message: 'You are not enrolled in this unit.' })
     const existing = mock.attendance.find(a => String(a.session_id) === String(session.id) && String(a.student_id) === String(sid))
