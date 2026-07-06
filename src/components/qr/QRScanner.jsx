@@ -58,7 +58,7 @@ export default function QRScanner({ onScan, onError, active = true }) {
         if (now - lastScanRef.current > 2000) {
           lastScanRef.current = now
           onScan?.(code.data)
-          return // pause loop briefly
+          // Do not return here! We want the loop to continue in case the parent doesn't stop us.
         }
       }
     } catch (err) {
@@ -120,6 +120,7 @@ export default function QRScanner({ onScan, onError, active = true }) {
           ref={videoRef}
           className="w-full h-full object-cover"
           playsInline
+          autoPlay
           muted
         />
 
